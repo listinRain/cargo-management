@@ -1,0 +1,370 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ▶ 本地开发：SQLite  ▶ 部署 Vercel + Supabase：改为 "postgresql"
+// ▶ 部署时同时把 src/app/api/products/route.ts 中 contains 加上 mode: 'insensitive'
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  password      String
+  image         String?
+  role          String    @default("VIEWER")
+  phone         String?
+  status        String    @default("ACTIVE")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions        Session[]
+  inboundOrders   InboundOrder[]   @relation("InboundHandler")
+  outboundOrders  OutboundOrder[]  @relation("OutboundHandler")
+  checkOrders     InventoryCheck[] @relation("CheckHandler")
+  transactionLogs TransactionLog[] @relation("TransactionOperator")
+  auditLogs       AuditLog[]
+  notifications   Notification[]
+
+  @@map("users")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String
+  code      String?  @unique
+  parentId  String?
+  level     Int      @default(1)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[] @relation("CategoryHierarchy")
+  products Product[]
+
+  @@map("categories")
+}
+
+model Warehouse {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  address   String?
+  manager   String?
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  locations          Location[]
+  inventory          Inventory[]
+  inboundItems       InboundOrderItem[]
+  outboundItems      OutboundOrderItem[]
+  inventoryChecks    InventoryCheck[]
+  transactionLogs    TransactionLog[]
+
+  @@map("warehouses")
+}
+
+model Location {
+  id          String   @id @default(cuid())
+  name        String
+  code        String
+  warehouseId String
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  warehouse      Warehouse            @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  inventory      Inventory[]
+  inboundItems   InboundOrderItem[]
+  outboundItems  OutboundOrderItem[]
+  checkItems     InventoryCheckItem[]
+  transactionLogs TransactionLog[]
+
+  @@unique([warehouseId, code])
+  @@map("locations")
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  name          String
+  code          String   @unique
+  specification String?
+  unit          String   @default("pcs")
+  unitPrice     Float    @default(0)
+  categoryId    String?
+  imageUrl      String?
+  barcode       String?  @unique
+  minStock      Float    @default(0)
+  maxStock      Float    @default(0)
+  remark        String?
+  status        String   @default("ACTIVE")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  category        Category?           @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  inventory       Inventory[]
+  inboundItems    InboundOrderItem[]
+  outboundItems   OutboundOrderItem[]
+  checkItems      InventoryCheckItem[]
+  transactionLogs TransactionLog[]
+
+  @@map("products")
+}
+
+model Inventory {
+  id          String   @id @default(cuid())
+  productId   String
+  warehouseId String
+  locationId  String
+  quantity    Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  location  Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, warehouseId, locationId])
+  @@map("inventory")
+}
+
+model Supplier {
+  id            String   @id @default(cuid())
+  name          String
+  code          String?  @unique
+  contactPerson String?
+  phone         String?
+  email         String?
+  address       String?
+  remark        String?
+  status        String   @default("ACTIVE")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  inboundOrders InboundOrder[]
+
+  @@map("suppliers")
+}
+
+model Customer {
+  id            String   @id @default(cuid())
+  name          String
+  code          String?  @unique
+  contactPerson String?
+  phone         String?
+  email         String?
+  address       String?
+  remark        String?
+  status        String   @default("ACTIVE")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  outboundOrders OutboundOrder[] @relation("OutboundCustomer")
+
+  @@map("customers")
+}
+
+model Department {
+  id          String   @id @default(cuid())
+  name        String
+  code        String?  @unique
+  description String?
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  outboundOrders OutboundOrder[] @relation("OutboundDepartment")
+
+  @@map("departments")
+}
+
+model InboundOrder {
+  id          String   @id @default(cuid())
+  orderNo     String   @unique
+  type        String   @default("PURCHASE")
+  supplierId  String?
+  status      String   @default("DRAFT")
+  totalAmount Float    @default(0)
+  handlerId   String
+  inboundDate DateTime @default(now())
+  remark      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  supplier Supplier?          @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  handler  User               @relation("InboundHandler", fields: [handlerId], references: [id])
+  items    InboundOrderItem[]
+
+  @@map("inbound_orders")
+}
+
+model InboundOrderItem {
+  id             String @id @default(cuid())
+  inboundOrderId String
+  productId      String
+  quantity       Float
+  unitPrice      Float
+  totalPrice     Float
+  warehouseId    String
+  locationId     String
+  createdAt      DateTime @default(now())
+
+  inboundOrder InboundOrder @relation(fields: [inboundOrderId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId], references: [id])
+  warehouse    Warehouse    @relation(fields: [warehouseId], references: [id])
+  location     Location     @relation(fields: [locationId], references: [id])
+
+  @@map("inbound_order_items")
+}
+
+model OutboundOrder {
+  id           String   @id @default(cuid())
+  orderNo      String   @unique
+  type         String   @default("SALES")
+  customerId   String?
+  departmentId String?
+  status       String   @default("DRAFT")
+  totalAmount  Float    @default(0)
+  handlerId    String
+  outboundDate DateTime @default(now())
+  remark       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  customer   Customer?  @relation("OutboundCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  department Department? @relation("OutboundDepartment", fields: [departmentId], references: [id], onDelete: SetNull)
+  handler    User        @relation("OutboundHandler", fields: [handlerId], references: [id])
+  items      OutboundOrderItem[]
+
+  @@map("outbound_orders")
+}
+
+model OutboundOrderItem {
+  id              String @id @default(cuid())
+  outboundOrderId String
+  productId       String
+  quantity        Float
+  unitPrice       Float
+  totalPrice      Float
+  warehouseId     String
+  locationId      String
+  createdAt       DateTime @default(now())
+
+  outboundOrder OutboundOrder @relation(fields: [outboundOrderId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id])
+  warehouse     Warehouse     @relation(fields: [warehouseId], references: [id])
+  location      Location      @relation(fields: [locationId], references: [id])
+
+  @@map("outbound_order_items")
+}
+
+model InventoryCheck {
+  id          String   @id @default(cuid())
+  checkNo     String   @unique
+  warehouseId String
+  status      String   @default("DRAFT")
+  checkDate   DateTime @default(now())
+  handlerId   String
+  remark      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  warehouse Warehouse           @relation(fields: [warehouseId], references: [id])
+  handler   User                @relation("CheckHandler", fields: [handlerId], references: [id])
+  items     InventoryCheckItem[]
+
+  @@map("inventory_checks")
+}
+
+model InventoryCheckItem {
+  id             String @id @default(cuid())
+  checkId        String
+  productId      String
+  locationId     String
+  bookQuantity   Float
+  actualQuantity Float  @default(0)
+  difference     Float  @default(0)
+  remark         String?
+  createdAt      DateTime @default(now())
+
+  check    InventoryCheck @relation(fields: [checkId], references: [id], onDelete: Cascade)
+  product  Product        @relation(fields: [productId], references: [id])
+  location Location       @relation(fields: [locationId], references: [id])
+
+  @@map("inventory_check_items")
+}
+
+model TransactionLog {
+  id              String   @id @default(cuid())
+  productId       String
+  type            String
+  referenceNo     String?
+  quantity        Float
+  beforeQuantity  Float
+  afterQuantity   Float
+  warehouseId     String
+  locationId      String
+  operatorId      String?
+  remark          String?
+  createdAt       DateTime @default(now())
+
+  product   Product   @relation(fields: [productId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  location  Location  @relation(fields: [locationId], references: [id])
+  operator  User?     @relation("TransactionOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+
+  @@index([productId])
+  @@index([createdAt])
+  @@index([type])
+  @@map("transaction_logs")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  entity    String
+  entityId  String?
+  oldValue  String?
+  newValue  String?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([entity])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String
+  isRead    Boolean  @default(false)
+  relatedId String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
