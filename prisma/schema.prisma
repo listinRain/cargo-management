@@ -2,10 +2,8 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// ▶ 本地开发：SQLite  ▶ 部署 Vercel + Supabase：改为 "postgresql"
-// ▶ 部署时同时把 src/app/api/products/route.ts 中 contains 加上 mode: 'insensitive'
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

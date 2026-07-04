@@ -13,9 +13,8 @@ export async function GET(req: NextRequest) {
   const where: Record<string, unknown> = {};
   if (search) {
     where.OR = [
-      // SQLite 默认大小写不敏感，部署 PostgreSQL 时需加上 mode: 'insensitive'
-      { name: { contains: search } },
-      { code: { contains: search } },
+      { name: { contains: search, mode: "insensitive" as const } },
+      { code: { contains: search, mode: "insensitive" as const } },
     ];
   }
   if (categoryId) where.categoryId = categoryId;
