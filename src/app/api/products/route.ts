@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireWriteAccess } from "@/lib/auth-utils";
@@ -15,8 +13,8 @@ export async function GET(req: NextRequest) {
   const where: Record<string, unknown> = {};
   if (search) {
     where.OR = [
-      { name: { contains: search, mode: "insensitive" as const } },
-      { code: { contains: search, mode: "insensitive" as const } },
+      { name: { contains: search } },
+      { code: { contains: search } },
     ];
   }
   if (categoryId) where.categoryId = categoryId;
