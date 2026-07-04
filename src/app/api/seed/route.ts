@@ -1,7 +1,6 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { execSync } from "child_process";
 import { prisma } from "@/lib/prisma";
 import { requireAdminAccess } from "@/lib/auth-utils";
 import bcrypt from "bcryptjs";
@@ -11,29 +10,15 @@ export async function GET() {
   if (error) return error;
 
   try {
-    // 步骤1：创建/更新数据库表结构
-    let schemaResult = "";
-    try {
-      schemaResult = execSync("npx prisma db push --skip-generate", {
-        encoding: "utf-8",
-        timeout: 30000,
-        env: { ...process.env },
-      });
-    } catch (e: any) {
-      schemaResult = e.stdout || e.stderr || e.message || "schema push error";
-    }
-
-    // 步骤2：检查是否已有数据
+    // 检查是否已播种
     const userCount = await prisma.user.count();
     if (userCount > 0) {
       return NextResponse.json({
         success: true,
-        message: `数据库已初始化（已有 ${userCount} 个用户）。无需重复播种。`,
-        schema: schemaResult.trim(),
+        message: `数据库已有 ${userCount} 个用户，无需重复播种。`,
       });
     }
 
-    // 步骤3：播种
     const passwordHash = await bcrypt.hash("123456", 12);
 
     await prisma.user.create({ data: { name: "系统管理员", email: "admin@example.com", password: passwordHash, role: "ADMIN", phone: "13800000001" } });
@@ -58,10 +43,8 @@ export async function GET() {
 
     await prisma.supplier.create({ data: { name: "深圳科技有限公司", code: "SUP-001", contactPerson: "王经理", phone: "0755-12345678", email: "wang@sztech.com", address: "深圳市南山区" } });
     await prisma.supplier.create({ data: { name: "北京电子器材公司", code: "SUP-002", contactPerson: "赵主管", phone: "010-87654321", email: "zhao@bjelec.com", address: "北京市海淀区" } });
-
     await prisma.customer.create({ data: { name: "上海贸易有限公司", code: "CUS-001", contactPerson: "刘总", phone: "021-11112222" } });
     await prisma.customer.create({ data: { name: "广州零售企业", code: "CUS-002", contactPerson: "陈经理", phone: "020-33334444" } });
-
     await prisma.department.create({ data: { name: "生产部", code: "DEPT-PROD" } });
     await prisma.department.create({ data: { name: "行政部", code: "DEPT-ADMIN" } });
 
@@ -83,12 +66,11 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       message: "数据库初始化完成！登录 admin@example.com / 123456",
-      schema: schemaResult.trim(),
     });
   } catch (e: any) {
     return NextResponse.json({
       success: false,
-      error: "初始化失败：" + (e.message || "未知错误"),
+      error: "播种失败：" + (e.message || "未知错误"),
     }, { status: 500 });
   }
 }
